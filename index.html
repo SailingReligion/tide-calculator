@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -396,49 +395,57 @@
         let map, userMarker, portMarkers = [];
         let selectedPort = null;
         function initMap(lat, lon) {
-    if (!map) {
-        map = L.map('map').setView([lat, lon], 13);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            attribution: '&copy; OpenStreetMap contributors'
-        }).addTo(map);
+            if (!map) {
+                map = L.map('map').setView([lat, lon], 7);
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    attribution: '&copy; OpenStreetMap contributors'
+                }).addTo(map);
 
-        // Evento: clic en el mapa para seleccionar cualquier punto
-        map.on('click', function(e) {
-            const lat = e.latlng.lat;
-            const lon = e.latlng.lng;
+                // Evento: clic en el mapa para seleccionar cualquier punto
+                map.on('click', function(e) {
+                    const lat = e.latlng.lat;
+                    const lon = e.latlng.lng;
+                    // Actualiza los campos de lat/lon en la calculadora
+                    document.getElementById('latitude').value = lat.toFixed(6);
+                    document.getElementById('longitude').value = lon.toFixed(6);
+                    // Mueve el marcador al nuevo punto
+                    if (userMarker) map.removeLayer(userMarker);
+                    userMarker = L.marker([lat, lon], {title: "Selected Location"}).addTo(map);
+                    // Actualiza la gráfica de mareas para el nuevo punto
+                    showTideChart(lat, lon);
+                });
+
+                // Permite calcular marea al editar manualmente los campos
+                document.getElementById('latitude').addEventListener('change', function() {
+                    const lat = parseFloat(this.value);
+                    const lon = parseFloat(document.getElementById('longitude').value);
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        map.setView([lat, lon], 10);
+                        if (userMarker) map.removeLayer(userMarker);
+                        userMarker = L.marker([lat, lon], {title: "Manual Location"}).addTo(map);
+                        showTideChart(lat, lon);
+                    }
+                });
+                document.getElementById('longitude').addEventListener('change', function() {
+                    const lat = parseFloat(document.getElementById('latitude').value);
+                    const lon = parseFloat(this.value);
+                    if (!isNaN(lat) && !isNaN(lon)) {
+                        map.setView([lat, lon], 10);
+                        if (userMarker) map.removeLayer(userMarker);
+                        userMarker = L.marker([lat, lon], {title: "Manual Location"}).addTo(map);
+                        showTideChart(lat, lon);
+                    }
+                });
+            } else {
+                map.setView([lat, lon], 7);
+            }
+            // User marker
+            if (userMarker) map.removeLayer(userMarker);
+            userMarker = L.marker([lat, lon], {title: "Your Location"}).addTo(map);
+            // Actualiza los campos de lat/lon
             document.getElementById('latitude').value = lat.toFixed(6);
             document.getElementById('longitude').value = lon.toFixed(6);
-            if (userMarker) map.removeLayer(userMarker);
-            userMarker = L.marker([lat, lon], {title: "Selected Location"}).addTo(map);
-            showTideChart(lat, lon);
-        });
-
-        // Permite calcular marea al editar manualmente los campos
-        document.getElementById('latitude').addEventListener('change', function() {
-            const lat = parseFloat(this.value);
-            const lon = parseFloat(document.getElementById('longitude').value);
-            if (!isNaN(lat) && !isNaN(lon)) {
-                map.setView([lat, lon], 13);
-                if (userMarker) map.removeLayer(userMarker);
-                userMarker = L.marker([lat, lon], {title: "Manual Location"}).addTo(map);
-                showTideChart(lat, lon);
-            }
-        });
-        document.getElementById('longitude').addEventListener('change', function() {
-            const lat = parseFloat(document.getElementById('latitude').value);
-            const lon = parseFloat(this.value);
-            if (!isNaN(lat) && !isNaN(lon)) {
-                map.setView([lat, lon], 13);
-                if (userMarker) map.removeLayer(userMarker);
-                userMarker = L.marker([lat, lon], {title: "Manual Location"}).addTo(map);
-                showTideChart(lat, lon);
-            }
-        });
-    } else {
-        map.setView([lat, lon], 13);
-    }
-}
-                  
+        }
 
         // --- Port List and Markers ---
         function updatePortList(lat, lon) {
@@ -609,12 +616,7 @@
                     const lon = position.coords.longitude;
                     statusElement.textContent = '✅ Location detected!';
                     // Center map and update user marker
-                    map.setView([lat, lon], 13);
                     initMap(lat, lon);
-                    if (userMarker) map.removeLayer(userMarker);
-                    userMarker = L.marker([lat, lon], {title: "Your Location"}).addTo(map);
-                    document.getElementById('latitude').value = lat.toFixed(6);
-                    document.getElementById('longitude').value = lon.toFixed(6);
                     // Update port list and markers
                     updatePortList(lat, lon);
                     // Get place name using OpenStreetMap Nominatim
