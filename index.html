@@ -190,6 +190,25 @@
             .logo { margin-bottom: 8px; }
             #map { min-height: 220px; height: 220px; }
         }
+/* Estilos a agregar */
+.tide-status {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #00BFFF;
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    max-width: 300px;
+    z-index: 1000;
+}
+
+.tide-info {
+    font-size: 1.2em;
+    margin-top: 10px;
+    line-height: 1.5;
+}
     </style>
 </head>
 <body>
@@ -247,9 +266,10 @@
             <div id="map"></div>
             <div class="chart-container" style="display:none;">
                 <canvas id="tideChart" height="220"></canvas>
+                <div id="station-info" style="margin-top: 10px; color: #003366; font-size: 15px;"></div>
             </div>
             <div class="note">
-                <b>Note:</b> This calculator uses a simple harmonic model for educational purposes. For professional navigation, always consult official sources and updated nautical charts. Sailing Religion is not responsible for the use of this data in critical situations.
+                <b>Note:</b> This calculator uses real-time NOAA tide data for US waters. For locations outside the US, please consult local maritime authorities. Sailing Religion is not responsible for the use of this data in critical situations.
             </div>
         </div>
     </div>
@@ -267,198 +287,94 @@
             }, 1800);
         });
 
-        // --- Example Port Database (expand as needed) ---
-        const ports = [// América del Norte y Caribe
-    { name: "Miami Harbor", lat: 25.7781, lon: -80.1794 },
-    { name: "Key West", lat: 24.5551, lon: -81.7800 },
-    { name: "Fort Lauderdale", lat: 26.1224, lon: -80.1373 },
-    { name: "Annapolis", lat: 38.9784, lon: -76.4922 },
-    { name: "Newport", lat: 41.4901, lon: -71.3128 },
-    { name: "Marina del Rey", lat: 33.9761, lon: -118.4514 },
-    { name: "San Diego", lat: 32.7157, lon: -117.1611 },
-    { name: "San Francisco Bay", lat: 37.8067, lon: -122.4658 },
-    { name: "Vancouver", lat: 49.2827, lon: -123.1207 },
-    { name: "Toronto", lat: 43.6510, lon: -79.3470 },
-    { name: "Nassau", lat: 25.0600, lon: -77.3450 },
-    { name: "Bimini", lat: 25.7280, lon: -79.2970 },
-    { name: "Freeport", lat: 26.5333, lon: -78.7000 },
-    { name: "Exumas", lat: 23.6167, lon: -75.9667 },
-    { name: "St. Thomas", lat: 18.3381, lon: -64.9407 },
-    { name: "St. Martin", lat: 18.0708, lon: -63.0501 },
-    { name: "Tortola", lat: 18.4286, lon: -64.6185 },
-    { name: "Antigua", lat: 17.1274, lon: -61.8468 },
-    { name: "St. Lucia", lat: 13.9094, lon: -60.9789 },
-    { name: "Grenada", lat: 12.0561, lon: -61.7486 },
-    { name: "Martinique", lat: 14.6415, lon: -61.0242 },
-    { name: "Guadeloupe", lat: 16.2650, lon: -61.5510 },
-    { name: "Puerto Rico (San Juan)", lat: 18.4655, lon: -66.1057 },
-    { name: "La Habana", lat: 23.1136, lon: -82.3666 },
-    { name: "Cancún", lat: 21.1619, lon: -86.8515 },
-    { name: "Mérida", lat: 21.1619, lon: -89.0720 },
-    { name: "Isla Mujeres", lat: 21.2329, lon: -86.7317 },
-    { name: "Cozumel", lat: 20.5100, lon: -86.9500 },
-    { name: "Belize City", lat: 17.5046, lon: -88.1962 },
-    { name: "Roatán", lat: 16.3142, lon: -86.5370 },
+        // --- Haversine formula to calculate distance in nautical miles ---
+        function haversineNM(lat1, lon1, lat2, lon2) {
+            const toRad = (deg) => (deg * Math.PI) / 180;
+            const R = 3440.065; // Earth radius in nautical miles
+            const dLat = toRad(lat2 - lat1);
+            const dLon = toRad(lon2 - lon1);
+            const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c;
+        }
 
-    // Sudamérica
-    { name: "Buenos Aires", lat: -34.6037, lon: -58.3816 },
-    { name: "Rio de la Plata", lat: -35.0, lon: -57.5 },
-    { name: "Punta del Este", lat: -34.9670, lon: -54.9510 },
-    { name: "Mar del Plata", lat: -38.0055, lon: -57.5426 },
-    { name: "Valparaíso", lat: -33.0472, lon: -71.6127 },
-    { name: "Puerto Montt", lat: -41.4717, lon: -72.9369 },
-    { name: "Ilhabela", lat: -23.7784, lon: -45.3581 },
-    { name: "Angra dos Reis", lat: -23.0067, lon: -44.3181 },
-    { name: "Paraty", lat: -23.2221, lon: -44.7176 },
-    { name: "Salvador de Bahia", lat: -12.9777, lon: -38.5016 },
-    { name: "Recife", lat: -8.0476, lon: -34.8770 },
+        // --- Port Database: 10 US Ports (puedes agregar más) ---
+        const ports = [
+            { name: "Port of Miami, FL", lat: 25.7781, lon: -80.1794 },
+            { name: "Port of Savannah, GA", lat: 32.0809, lon: -81.0912 },
+            { name: "Port of Charleston, SC", lat: 32.7940, lon: -79.9414 },
+            { name: "Port of Baltimore, MD", lat: 39.2667, lon: -76.5794 },
+            { name: "Port of Houston, TX", lat: 29.7364, lon: -95.2650 },
+            { name: "Port of New York and New Jersey, NY/NJ", lat: 40.6681, lon: -74.0451 },
+            { name: "Port of Long Beach, CA", lat: 33.7542, lon: -118.2167 },
+            { name: "Port of Los Angeles, CA", lat: 33.7361, lon: -118.2626 },
+            { name: "Port of Tacoma, WA", lat: 47.2529, lon: -122.4443 },
+            { name: "Port of Seattle, WA", lat: 47.6019, lon: -122.3365 }
+            // Agrega más puertos aquí si lo deseas
+        ];
 
-    // Europa Mediterráneo
-    { name: "Barcelona", lat: 41.3851, lon: 2.1734 },
-    { name: "Valencia", lat: 39.4667, lon: -0.3750 },
-    { name: "Palma de Mallorca", lat: 39.5696, lon: 2.6502 },
-    { name: "Ibiza", lat: 38.9088, lon: 1.4321 },
-    { name: "Alicante", lat: 38.3452, lon: -0.4810 },
-    { name: "Cartagena", lat: 37.6050, lon: -0.9867 },
-    { name: "Málaga", lat: 36.7213, lon: -4.4214 },
-    { name: "Marbella", lat: 36.5101, lon: -4.8825 },
-    { name: "Cádiz", lat: 36.5297, lon: -6.2924 },
-    { name: "Lisboa", lat: 38.7223, lon: -9.1393 },
-    { name: "Portimão", lat: 37.1360, lon: -8.5382 },
-    { name: "Cascais", lat: 38.6979, lon: -9.4201 },
-    { name: "Saint-Tropez", lat: 43.2672, lon: 6.6400 },
-    { name: "Cannes", lat: 43.5528, lon: 7.0174 },
-    { name: "Nice", lat: 43.7102, lon: 7.2620 },
-    { name: "Monaco", lat: 43.7384, lon: 7.4246 },
-    { name: "Génova", lat: 44.4056, lon: 8.9463 },
-    { name: "La Spezia", lat: 44.1025, lon: 9.8241 },
-    { name: "Portofino", lat: 44.3031, lon: 9.2094 },
-    { name: "Civitavecchia", lat: 42.0924, lon: 11.7960 },
-    { name: "Roma (Ostia)", lat: 41.7325, lon: 12.2766 },
-    { name: "Nápoles", lat: 40.8518, lon: 14.2681 },
-    { name: "Palermo", lat: 38.1157, lon: 13.3615 },
-    { name: "Cagliari", lat: 39.2238, lon: 9.1217 },
-    { name: "Corfú", lat: 39.6243, lon: 19.9217 },
-    { name: "Atenas (Pireo)", lat: 37.9420, lon: 23.6465 },
-    { name: "Mykonos", lat: 37.4467, lon: 25.3289 },
-    { name: "Santorini", lat: 36.3932, lon: 25.4615 },
-    { name: "Kos", lat: 36.8937, lon: 27.2877 },
-    { name: "Split", lat: 43.5081, lon: 16.4402 },
-    { name: "Dubrovnik", lat: 42.6507, lon: 18.0944 },
-    { name: "Kotor", lat: 42.4247, lon: 18.7712 },
-    { name: "Valletta", lat: 35.8989, lon: 14.5146 },
-
-    // Europa Atlántico y Norte
-    { name: "La Rochelle", lat: 46.1603, lon: -1.1511 },
-    { name: "Brest", lat: 48.3904, lon: -4.4861 },
-    { name: "Saint-Malo", lat: 48.6493, lon: -2.0257 },
-    { name: "Cherbourg", lat: 49.6337, lon: -1.6221 },
-    { name: "Southampton", lat: 50.9097, lon: -1.4044 },
-    { name: "Portsmouth", lat: 50.7989, lon: -1.0912 },
-    { name: "Plymouth", lat: 50.3755, lon: -4.1427 },
-    { name: "Falmouth", lat: 50.1540, lon: -5.0711 },
-    { name: "Dublin", lat: 53.3498, lon: -6.2603 },
-    { name: "Cork", lat: 51.8985, lon: -8.4756 },
-    { name: "Amsterdam", lat: 52.3702, lon: 4.8952 },
-    { name: "Rotterdam", lat: 51.9225, lon: 4.4792 },
-    { name: "Hamburgo", lat: 53.5511, lon: 9.9937 },
-    { name: "Kiel", lat: 54.3233, lon: 10.1228 },
-    { name: "Oslo", lat: 59.9139, lon: 10.7522 },
-    { name: "Stockholm", lat: 59.3293, lon: 18.0686 },
-    { name: "Helsinki", lat: 60.1699, lon: 24.9384 },
-    { name: "Copenhague", lat: 55.6761, lon: 12.5683 },
-
-    // África y Oriente Medio
-    { name: "Ciudad del Cabo", lat: -33.9249, lon: 18.4241 },
-    { name: "Durban", lat: -29.8587, lon: 31.0218 },
-    { name: "El Cairo (Alejandría)", lat: 31.2001, lon: 29.9187 },
-    { name: "Tánger", lat: 35.7595, lon: -5.8339 },
-    { name: "Casablanca", lat: 33.5731, lon: -7.5898 },
-    { name: "Dubái", lat: 25.2048, lon: 55.2708 },
-
-    // Asia y Pacífico
-    { name: "Phuket", lat: 7.8804, lon: 98.3923 },
-    { name: "Langkawi", lat: 6.3528, lon: 99.7782 },
-    { name: "Singapur", lat: 1.3521, lon: 103.8198 },
-    { name: "Hong Kong", lat: 22.3193, lon: 114.1694 },
-    { name: "Auckland", lat: -36.8485, lon: 174.7633 },
-    { name: "Sydney", lat: -33.8688, lon: 151.2093 },
-    { name: "Brisbane", lat: -27.4698, lon: 153.0251 },
-    { name: "Melbourne", lat: -37.8136, lon: 144.9631 },
-    { name: "Nouméa", lat: -22.2758, lon: 166.4580 },
-    { name: "Papeete (Tahiti)", lat: -17.5516, lon: -149.5585 },
-    { name: "Honolulu", lat: 21.3069, lon: -157.8583 },
-    { name: "San Juan (Puerto Rico)", lat: 18.4655, lon: -66.1057 }
-];
-    
         // --- Map Initialization ---
         let map, userMarker, portMarkers = [];
         let selectedPort = null;
+
         function initMap(lat, lon) {
             if (!map) {
-                map = L.map('map').setView([lat, lon], 7);
+                map = L.map('map').setView([lat, lon], 13);
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                    attribution: '&copy; OpenStreetMap contributors'
+                    attribution: '&copy; OpenStreetMap contributors',
                 }).addTo(map);
 
-                // Evento: clic en el mapa para seleccionar cualquier punto
-                map.on('click', function(e) {
+                // Click event to select location
+                map.on('click', function (e) {
                     const lat = e.latlng.lat;
                     const lon = e.latlng.lng;
-                    // Actualiza los campos de lat/lon en la calculadora
                     document.getElementById('latitude').value = lat.toFixed(6);
                     document.getElementById('longitude').value = lon.toFixed(6);
-                    // Mueve el marcador al nuevo punto
                     if (userMarker) map.removeLayer(userMarker);
-                    userMarker = L.marker([lat, lon], {title: "Selected Location"}).addTo(map);
-                    // Actualiza la gráfica de mareas para el nuevo punto
+                    userMarker = L.marker([lat, lon], { title: "Selected Location" }).addTo(map);
                     showTideChart(lat, lon);
                 });
 
-                // Permite calcular marea al editar manualmente los campos
-                document.getElementById('latitude').addEventListener('change', function() {
+                // Manual input change events
+                document.getElementById('latitude').addEventListener('change', function () {
                     const lat = parseFloat(this.value);
                     const lon = parseFloat(document.getElementById('longitude').value);
                     if (!isNaN(lat) && !isNaN(lon)) {
-                        map.setView([lat, lon], 10);
+                        map.setView([lat, lon], 13);
                         if (userMarker) map.removeLayer(userMarker);
-                        userMarker = L.marker([lat, lon], {title: "Manual Location"}).addTo(map);
+                        userMarker = L.marker([lat, lon], { title: "Manual Location" }).addTo(map);
                         showTideChart(lat, lon);
                     }
                 });
-                document.getElementById('longitude').addEventListener('change', function() {
+                document.getElementById('longitude').addEventListener('change', function () {
                     const lat = parseFloat(document.getElementById('latitude').value);
                     const lon = parseFloat(this.value);
                     if (!isNaN(lat) && !isNaN(lon)) {
-                        map.setView([lat, lon], 10);
+                        map.setView([lat, lon], 13);
                         if (userMarker) map.removeLayer(userMarker);
-                        userMarker = L.marker([lat, lon], {title: "Manual Location"}).addTo(map);
+                        userMarker = L.marker([lat, lon], { title: "Manual Location" }).addTo(map);
                         showTideChart(lat, lon);
                     }
                 });
             } else {
-                map.setView([lat, lon], 7);
+                map.setView([lat, lon], 13);
             }
-            // User marker
-            if (userMarker) map.removeLayer(userMarker);
-            userMarker = L.marker([lat, lon], {title: "Your Location"}).addTo(map);
-            // Actualiza los campos de lat/lon
-            document.getElementById('latitude').value = lat.toFixed(6);
-            document.getElementById('longitude').value = lon.toFixed(6);
         }
 
         // --- Port List and Markers ---
         function updatePortList(lat, lon) {
             // Sort ports by distance
-            ports.forEach(p => {
-                p.dist = getDistance(lat, lon, p.lat, p.lon);
+            ports.forEach((p) => {
+                p.dist = haversineNM(lat, lon, p.lat, p.lon);
             });
             ports.sort((a, b) => a.dist - b.dist);
 
             // Update list
             const portList = document.getElementById('portList');
             portList.innerHTML = '';
-            ports.forEach((p, idx) => {
+            ports.forEach((p) => {
                 const div = document.createElement('div');
                 div.className = 'port-item' + (selectedPort && selectedPort.name === p.name ? ' selected' : '');
                 div.innerHTML = `${p.name} <span style="float:right;">${p.dist.toFixed(1)} NM</span>`;
@@ -467,8 +383,7 @@
                     updatePortList(lat, lon);
                     map.setView([p.lat, p.lon], 10);
                     showTideChart(p.lat, p.lon);
-                    highlightPortMarker(p.name);
-                    // Actualiza los campos de lat/lon
+                    // Update lat/lon inputs
                     document.getElementById('latitude').value = p.lat.toFixed(6);
                     document.getElementById('longitude').value = p.lon.toFixed(6);
                 };
@@ -476,23 +391,23 @@
             });
 
             // Update markers
-            portMarkers.forEach(m => map.removeLayer(m));
+            portMarkers.forEach((m) => map.removeLayer(m));
             portMarkers = [];
-            ports.forEach((p, idx) => {
+            ports.forEach((p) => {
                 const marker = L.marker([p.lat, p.lon], {
                     title: p.name,
                     icon: L.icon({
-                        iconUrl: "https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/images/marker-icon.png",
+                        iconUrl: 'https://cdn.jsdelivr.net/npm/leaflet@1.7.1/dist/images/marker-icon.png',
                         iconSize: [25, 41],
                         iconAnchor: [12, 41],
-                        popupAnchor: [1, -34]
-                    })
+                        popupAnchor: [1, -34],
+                    }),
                 }).addTo(map);
                 marker.on('click', () => {
                     selectedPort = p;
                     updatePortList(lat, lon);
                     showTideChart(p.lat, p.lon);
-                    // Actualiza los campos de lat/lon
+                    // Update lat/lon inputs
                     document.getElementById('latitude').value = p.lat.toFixed(6);
                     document.getElementById('longitude').value = p.lon.toFixed(6);
                 });
@@ -500,105 +415,188 @@
             });
         }
 
-        function highlightPortMarker(name) {
-            portMarkers.forEach(m => {
-                if (m.options.title === name) {
-                    m.setZIndexOffset(1000);
-                    m.openPopup();
-                } else {
-                    m.setZIndexOffset(0);
-                    m.closePopup();
+        // --- NOAA Tide Data Fetch ---
+        async function getNOAATideData(lat, lon, date) {
+            try {
+                // Search stations within 200 NM radius
+                const stationsUrl = `https://api.tidesandcurrents.noaa.gov/mdapi/prod/webapi/stations.json?lat=${lat}&lon=${lon}&radius=200`;
+                const stationsResponse = await fetch(stationsUrl);
+                const stationsData = await stationsResponse.json();
+
+                if (!stationsData.stations || stationsData.stations.length === 0) {
+                    throw new Error('No NOAA stations found nearby');
                 }
-            });
-        }
 
-        // --- Distance Calculation (Nautical Miles) ---
-        function getDistance(lat1, lon1, lat2, lon2) {
-            function toRad(x) { return x * Math.PI / 180; }
-            const R = 3440; // Nautical miles
-            const dLat = toRad(lat2 - lat1);
-            const dLon = toRad(lon2 - lon1);
-            const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
-                      Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) *
-                      Math.sin(dLon/2) * Math.sin(dLon/2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-            return R * c;
-        }
+                // Find closest station by distance
+                let minDist = Infinity;
+                let closestStation = null;
+                for (const st of stationsData.stations) {
+                    if (st.lat && st.lng) {
+                        const dist = haversineNM(lat, lon, parseFloat(st.lat), parseFloat(st.lng));
+                        if (dist < minDist) {
+                            minDist = dist;
+                            closestStation = st;
+                        }
+                    }
+                }
 
-        // --- Tide Calculation (Educational Model) ---
-        function calculateTide(t, lat) {
-            const amplitude = 1.2 + 0.2 * Math.cos(lat * Math.PI / 180);
-            const phase = 0;
-            const period = 12.42;
-            return amplitude * Math.sin(2 * Math.PI * t / period + phase);
-        }
+                if (!closestStation) {
+                    throw new Error('No valid NOAA station found');
+                }
 
-        function showTideChart(lat, lon) {
-            const date = document.getElementById('date').value;
-            const time = document.getElementById('time').value;
-            if (!date || !time) return;
-            const labels = [];
-            const data = [];
-            let t0 = parseInt(time.split(":")[0]) + parseInt(time.split(":")[1])/60;
-            for (let i = 0; i <= 24; i++) {
-                let t = (t0 + i) % 24;
-                labels.push(((t < 10) ? "0" : "") + Math.floor(t) + ":00");
-                data.push(calculateTide(t, lat));
+                // Format date YYYYMMDD
+                const formattedDate = date.split('-').join('');
+
+                // Fetch tide predictions for the date
+                const predictionsUrl =
+                    `https://api.tidesandcurrents.noaa.gov/api/prod/datagetter?` +
+                    `station=${closestStation.id}&` +
+                    `product=predictions&` +
+                    `datum=MLLW&` +
+                    `time_zone=lst_ldt&` +
+                    `units=english&` +
+                    `format=json&` +
+                    `begin_date=${formattedDate}&` +
+                    `end_date=${formattedDate}&` +
+                    `interval=60`;
+
+                const predictionsResponse = await fetch(predictionsUrl);
+                const predictionsData = await predictionsResponse.json();
+
+                return {
+                    station: closestStation,
+                    predictions: predictionsData.predictions || [],
+                };
+            } catch (error) {
+                console.error('Error fetching NOAA data:', error);
+                return null;
             }
-            if (window.tideChartObj) window.tideChartObj.destroy();
-            const ctx = document.getElementById('tideChart').getContext('2d');
-            window.tideChartObj = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Tide level (m)',
+        }
+
+        // --- Show Tide Chart ---
+      async function showTideChart(lat, lon) {
+    const date = document.getElementById('date').value;
+    const time = document.getElementById('time').value;
+    if (!date || !time) return;
+
+    try {
+        const tideData = await getNOAATideData(lat, lon, date);
+
+        if (!tideData || !tideData.predictions) {
+            document.querySelector('.chart-container').innerHTML =
+                '<div style="color: #003366; padding: 20px; text-align: center;">' +
+                'No NOAA tide data available for this location. Try a location closer to the US coast.' +
+                '</div>';
+            return;
+        }
+
+        const currentTime = new Date().getTime();
+
+        let closestPrediction = tideData.predictions.reduce((prev, current) => {
+            const prevTime = new Date(prev.t.replace(' ', 'T')).getTime();
+            const currentTimeVal = new Date(current.t.replace(' ', 'T')).getTime();
+            return (Math.abs(currentTimeVal - currentTime) < Math.abs(prevTime - currentTime)) ? current : prev;
+        });
+
+        // Actualizar el estado de la marea
+        const predTime = new Date(closestPrediction.t.replace(' ', 'T'));
+        const formattedTime = predTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        document.getElementById('currentHeight').innerHTML = `Height: ${parseFloat(closestPrediction.v).toFixed(1)} ft`;
+        document.getElementById('tideStatus').innerHTML = `Status: ${closestPrediction.type === 'H' ? 'High Tide' : 'Low Tide'}`;
+        document.getElementById('timeSince').innerHTML = `Last updated: ${formattedTime}`;
+
+        // Preparar datos para el gráfico
+        const labels = [];
+        const data = [];
+
+        tideData.predictions.forEach((prediction) => {
+            const predTime = new Date(prediction.t.replace(' ', 'T'));
+            labels.push(predTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            data.push(parseFloat(prediction.v));
+        });
+
+        if (window.tideChartObj) window.tideChartObj.destroy();
+
+        const ctx = document.getElementById('tideChart').getContext('2d');
+        window.tideChartObj = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Tide level (ft)',
                         data: data,
                         borderColor: '#00BFFF',
                         backgroundColor: 'rgba(0,191,255,0.15)',
                         pointRadius: 3,
                         pointBackgroundColor: '#003366',
                         tension: 0.4,
-                        fill: true
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: { display: false },
-                        title: {
-                            display: true,
-                            text: 'Tide prediction for the next 24 hours',
-                            color: '#003366',
-                            font: { size: 18, weight: 'bold' }
-                        }
+                        fill: true,
                     },
-                    scales: {
-                        x: {
-                            title: { display: true, text: 'Local time', color: '#003366', font: { size: 14 } },
-                            ticks: { color: '#003366' }
-                        },
-                        y: {
-                            title: { display: true, text: 'Height (m)', color: '#003366', font: { size: 14 } },
-                            ticks: { color: '#003366' },
-                            grid: { color: '#eaf6fb' }
-                        }
-                    }
-                }
-            });
-            document.querySelector('.chart-container').style.display = 'block';
-        }
+                ],
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: { display: false },
+                    title: {
+                        display: true,
+                        text: `Tide prediction for ${tideData.station.name}`,
+                        color: '#003366',
+                        font: { size: 18, weight: 'bold' },
+                    },
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Local time', color: '#003366', font: { size: 14 } },
+                        ticks: { color: '#003366' },
+                    },
+                    y: {
+                        title: { display: true, text: 'Height (ft)', color: '#003366', font: { size: 14 } },
+                        ticks: { color: '#003366' },
+                        grid: { color: '#eaf6fb' },
+                    },
+                },
+            },
+        });
 
-        // --- Date/Time Defaults ---
-        window.onload = function() {
-            const now = new Date();
-            document.getElementById('date').value = now.toISOString().slice(0,10);
-            let h = now.getHours(), m = now.getMinutes();
-            document.getElementById('time').value = (h<10?'0':'')+h+':'+(m<10?'0':'')+m;
+        document.querySelector('.chart-container').style.display = 'block';
+
+        // Información adicional de la estación
+        let stationLat = tideData.station && tideData.station.lat ? parseFloat(tideData.station.lat) : null;
+        let stationLon = tideData.station && tideData.station.lng ? parseFloat(tideData.station.lng) : null;
+        let distanceNM = stationLat && stationLon ? haversineNM(lat, lon, stationLat, stationLon) : null;
+
+        const stationName = tideData.station && tideData.station.name ? tideData.station.name : 'Unknown station';
+        const timezone = 'Local station time (usually local US time zone)';
+        let infoHTML = `<strong>Tide station:</strong> ${stationName}<br>
+                        <strong>Timezone:</strong> ${timezone}<br>`;
+
+        if (distanceNM !== null) {
+            infoHTML += `<strong>Distance to station:</strong> ${distanceNM.toFixed(1)} NM<br>`;
+            if (distanceNM > 50) {
+                infoHTML += `<span style="color: #d9534f; font-weight: bold;">⚠️ Warning: The nearest tide station is over 50 NM away. Tide predictions may not be accurate for this location.</span><br>`;
+            }
         }
+        infoHTML += `<em>All times on the chart are in the local time of the tide station.</em>`;
+
+        document.getElementById('station-info').innerHTML = infoHTML;
+
+    } catch (error) {
+        console.error('Error showing tide chart:', error);
+    }
+}
+        // --- Date/Time Defaults ---
+        window.onload = function () {
+            const now = new Date();
+            document.getElementById('date').value = now.toISOString().slice(0, 10);
+            let h = now.getHours(),
+                m = now.getMinutes();
+            document.getElementById('time').value = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+        };
 
         // --- Detect Location and Place Name ---
-        document.getElementById('detectLocation').addEventListener('click', function() {
+        document.getElementById('detectLocation').addEventListener('click', function () {
             const statusElement = document.getElementById('locationStatus');
             const locationNameElement = document.getElementById('locationName');
             statusElement.textContent = '';
@@ -611,18 +609,23 @@
 
             statusElement.textContent = '🔍 Detecting location...';
             navigator.geolocation.getCurrentPosition(
-                function(position) {
+                function (position) {
                     const lat = position.coords.latitude;
                     const lon = position.coords.longitude;
                     statusElement.textContent = '✅ Location detected!';
                     // Center map and update user marker
+                    map.setView([lat, lon], 13);
                     initMap(lat, lon);
+                    if (userMarker) map.removeLayer(userMarker);
+                    userMarker = L.marker([lat, lon], { title: 'Your Location' }).addTo(map);
+                    document.getElementById('latitude').value = lat.toFixed(6);
+                    document.getElementById('longitude').value = lon.toFixed(6);
                     // Update port list and markers
                     updatePortList(lat, lon);
                     // Get place name using OpenStreetMap Nominatim
                     fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`)
-                        .then(response => response.json())
-                        .then(data => {
+                        .then((response) => response.json())
+                        .then((data) => {
                             let locationText = '';
                             if (data.address) {
                                 const addr = data.address;
@@ -645,15 +648,15 @@
                             locationNameElement.innerHTML = locationText.replace(/\n/g, '<br>');
                             locationNameElement.style.display = 'block';
                         })
-                        .catch(error => {
+                        .catch((error) => {
                             locationNameElement.innerHTML = `📍 Lat: ${lat.toFixed(4)}°, Lon: ${lon.toFixed(4)}°`;
                             locationNameElement.style.display = 'block';
                         });
                     // Show tide chart for user location
                     showTideChart(lat, lon);
                 },
-                function(error) {
-                    switch(error.code) {
+                function (error) {
+                    switch (error.code) {
                         case error.PERMISSION_DENIED:
                             statusElement.textContent = '❌ Permission denied to access location';
                             break;
@@ -671,31 +674,53 @@
                 {
                     enableHighAccuracy: true,
                     timeout: 10000,
-                    maximumAge: 0
+                    maximumAge: 0,
                 }
             );
         });
 
         // --- Map and Port List Initialization on First Load ---
-        document.addEventListener('DOMContentLoaded', function() {
+        document.addEventListener('DOMContentLoaded', function () {
             // Default: Miami
-            const defaultLat = 25.7617, defaultLon = -80.1918;
+            const defaultLat = 25.7617,
+                defaultLon = -80.1918;
             initMap(defaultLat, defaultLon);
             updatePortList(defaultLat, defaultLon);
             showTideChart(defaultLat, defaultLon);
         });
 
         // --- Update Chart on Date/Time Change ---
-        document.getElementById('date').addEventListener('change', function() {
+        document.getElementById('date').addEventListener('change', function () {
             const lat = parseFloat(document.getElementById('latitude').value);
             const lon = parseFloat(document.getElementById('longitude').value);
             showTideChart(lat, lon);
         });
-        document.getElementById('time').addEventListener('change', function() {
+        document.getElementById('time').addEventListener('change', function () {
             const lat = parseFloat(document.getElementById('latitude').value);
             const lon = parseFloat(document.getElementById('longitude').value);
             showTideChart(lat, lon);
         });
     </script>
+<!-- Código a pegar -->
+<div class="tide-status" style="
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #00BFFF;
+    color: white;
+    padding: 15px;
+    border-radius: 10px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    max-width: 300px;
+    z-index: 1000;
+">
+    <h3 style="margin: 0; color: #fff8cd;">🌊 Current Tide Status</h3>
+    <div class="tide-info" style="font-size: 1.2em; margin-top: 10px; line-height: 1.5;">
+        <div id="currentHeight" style="font-weight: bold;"></div>
+        <div id="tideStatus"></div>
+        <div id="timeSince" style="font-style: italic; opacity: 0.8;"></div>
+    </div>
+</div>
+<!-- Fin del código a pegar -->
 </body>
 </html>
